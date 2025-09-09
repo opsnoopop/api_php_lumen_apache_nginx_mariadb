@@ -1,0 +1,72 @@
+services:
+  nginx:
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile
+    image: nginx:1_27_alpine_custom
+    container_name: container_nginx
+    restart: always
+    depends_on:
+      - api
+    ports:
+      - "80:80"
+    networks:
+      network_optest:
+        ipv4_address: 172.16.0.11
+
+  api:
+    build:
+      context: .
+      dockerfile: php/Dockerfile
+    image: php:8_4_apache_custom
+    container_name: container_php
+    restart: always
+    depends_on:
+      database:
+        condition: service_healthy
+    networks:
+      network_optest:
+        ipv4_address: 172.16.0.10
+
+  database:
+    image: mariadb:lts-ubi9
+    container_name: container_mariadb
+    restart: always
+    environment:
+      MARIADB_ROOT_PASSWORD: rootpass
+      MARIADB_DATABASE: testdb
+      MARIADB_USER: testuser
+      MARIADB_PASSWORD: testpass
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./mariadb:/var/lib/mysql
+      - ./mariadb_initdb:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "mariadb-admin ping -h localhost -u$$MARIADB_USER -p$$MARIADB_PASSWORD --silent"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    networks:
+      network_optest:
+        ipv4_address: 172.16.0.12
+
+  adminer:
+    image: adminer:5-standalone
+    container_name: container_adminer
+    restart: always
+    ports:
+      - 8080:8080
+    depends_on:
+      - database
+    networks:
+      network_optest:
+        ipv4_address: 172.16.0.13
+
+networks:
+  network_optest:
+    name: global_optest
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.16.0.0/24
